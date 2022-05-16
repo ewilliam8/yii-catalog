@@ -23,13 +23,13 @@ const entry = document.getElementById("search");
 // const get_user_info_url = (username) => `${PROTOCOL}://${HOST}:${PORT}/api/info/${username}`
 // const post_user_data = `${PROTOCOL}://${HOST}:${PORT}/api/save`
 
-const url_directions = 'http://catalog.test/web/directions'
-const url_users = 'http://catalog.test/web/users'
-const url_profiles = 'http://catalog.test/web/profiles'
-const url_user_directions = 'http://catalog.test/web/userdirections'
+const url_directions = 'http://catalog.loc/web/directions'
+const url_users = 'http://catalog.loc/web/users'
+const url_profiles = 'http://catalog.loc/web/profiles'
+const url_user_directions = 'http://catalog.loc/web/userdirections'
 
-const url_user_profiles = 'http://catalog.test/web/uprofiles'
-const url_post_data_users = 'http://catalog.test/web/users'
+const url_user_profiles = 'http://catalog.loc/web/uprofiles'
+const url_post_data_users = 'http://catalog.loc/web/users'
 
 async function yii_get_users () {
   const resp = await fetch(url_users, { origin: "cors" });
@@ -109,7 +109,7 @@ async function main () {
 async function addDirectionsToCatalog () {
   catalog.innerHTML = "";
 
-  directions.forEach(element => {
+  directions.forEach((element, index) => {
     const item = document.createElement("div");
     item.classList.add("direction");
     item.classList.add("border");
@@ -119,7 +119,7 @@ async function addDirectionsToCatalog () {
 
     item.innerHTML = `
     <button class="profile" id="direction_${element["id"]}" onclick="addToCatalog(${element["id"]})">
-        <h3>${element["name"]}</h3>
+       <h3>${index + 1} ${element["name"]}</h3>
     </button>
     `;
 
@@ -128,7 +128,7 @@ async function addDirectionsToCatalog () {
 }
 
 async function addProfilesToDirections () {
-  profiles.forEach(profile => {
+  profiles.forEach((profile, index) => {
     const direction = document.getElementById(`direction_${profile["direction_id"]}`);
     const html = `<p id="direction_${profile["direction_id"]}">${profile["name"]}</p>`;
 
@@ -173,6 +173,27 @@ function addToCatalog(id) {
         "updatedAt": new Date(Date.now()+(1000*60*(-(new Date()).getTimezoneOffset()))).toISOString().replace('T',' ').replace('Z',''),
       })
       priority_counter++
+    }
+  })
+
+  structure()
+}
+
+function deleteFromCatalog(id) {
+
+  choosenDirections.forEach((elem, index) => {
+    if(elem == id) {
+      choosenDirections.splice(index, 1)
+    }
+  })
+  localUserInfo.user_directions.forEach((elem, index) => {
+    if(elem.direction_id == id) {
+      delete localUserInfo.user_directions[index]
+    }
+  })
+  localUserInfo.profile_user.forEach((elem, index) => {
+    if (elem.direction_id == id) {
+      delete localUserInfo.profile_user[index]
     }
   })
 
@@ -227,12 +248,14 @@ function structure() {
     return a.priority - b.priority
   })
 
-  localUserInfo["user_directions"].forEach(elem => {
-    choosenDirections.push(elem["priority"])
+  let priority = []
+  localUserInfo["user_directions"].forEach((elem, index) => {
+    elem["priority"] = index
+    priority.push(elem["priority"])
   })
 
   // directions
-  localUserInfo["user_directions"].forEach(elem => {
+  localUserInfo["user_directions"].forEach((elem, index) => {
     const item = document.createElement("div");
     item.classList.add("direction");
     item.classList.add("border");
@@ -241,15 +264,15 @@ function structure() {
     item.classList.add("p-3");
 
     let arrows_d
-    if (elem["priority"] == 0 && choosenDirections.length !== 1) {
+    if (elem["priority"] == 0 && priority.length !== 1) {
       arrows_d = `<div class="column">
       <button class="down" onclick="move_direction(${elem["priority"]}, 'down')">↓</button></div>`
     }
-    else if (elem["priority"] == choosenDirections.length - 1 && choosenDirections.length > 1) {
-      arrows_d =  `<div class="column">
-                <button class="up" onclick="move_direction(${elem["priority"]}, 'up')">↑</button></div>`
+    else if (elem["priority"] == priority.length - 1 && priority.length > 1) {
+      arrows_d = `<div class="column">
+          <button class="up" onclick="move_direction(${elem["priority"]}, 'up')">↑</button></div>`
     }
-    else if (choosenDirections.length > 1) {
+    else if (priority.length > 1) {
       arrows_d =  `<div class="column">
                 <button class="up" onclick="move_direction(${elem["priority"]}, 'up')">↑</button>
                 <button class="down" onclick="move_direction(${elem["priority"]}, 'down')">↓</button></div>`
@@ -261,8 +284,8 @@ function structure() {
     item.innerHTML = `
     <div>
       ${arrows_d}
-      <button class="profile">
-        <h3>${directions[parseInt(elem["direction_id"] - 1, 10)]["name"]}</h3>
+      <button class="profile" onclick="deleteFromCatalog(${elem.direction_id})">
+        <h3>${index + 1} ${directions[parseInt(elem["direction_id"] - 1, 10)]["name"]}</h3>
       </button>
     </div>
     `;
@@ -277,14 +300,17 @@ function structure() {
       }
     })
 
-    localUserInfo["profile_user"].forEach(profile_elem => {
+    localUserInfo["profile_user"].forEach((profile_elem, index) => {
       if(profile_elem["direction_id"] == elem["direction_id"]) {
         const profile_item = document.createElement("div");
         const profile_id = parseInt(profile_elem["profile_id"], 10)
         profile_item.classList.add("profile_inner");
 
         let arrows_p
-        if (profile_elem["priority"] == 0) {
+        if (choosen_profile.length == 1) {
+          arrows_p = ''
+        }
+        else if (profile_elem["priority"] == 0) {
           arrows_p = `<div class="column">
           <button class="down" onclick="move_profile(${profile_elem["direction_id"]}, ${profile_elem["priority"]}, 'down')">↓</button></div>`
         }
@@ -338,7 +364,8 @@ async function saveUserInfo() {
     delete elem.createdAt
     delete elem.updatedAt
     elem["user_id"] = userid.id
-    createPost(elem, url_user_profiles).then((res) => console.log(res))
+    createPost(elem, url_user_profiles)
+    // .then((res) => console.log(res))
   })
 }
 
@@ -359,13 +386,10 @@ async function getUserInfo() {
 
   let user_id
   users.forEach(elem => {
-    console.log(elem)
     if(elem.name == value) {
       user_id = elem.id
     }
   })
-
-  console.log("user_id: ", user_id)
 
   // directions
   const user_directions = await yii_get_user_directions()
@@ -374,12 +398,10 @@ async function getUserInfo() {
     return
   }
 
-  console.log(user_directions)
-
   user_directions.forEach(elem => {
     if(elem.user_id == user_id) {
       localUserInfo.user_directions.push(elem)
-      // choosenDirections.push()
+      choosenDirections.push(elem["direction_id"])
     }
   })
 
@@ -396,7 +418,7 @@ async function getUserInfo() {
     }
   })
 
-  console.log(localUserInfo)
+  // console.log(localUserInfo)
 
 
   // const userinfo = await get_user_info(value)
